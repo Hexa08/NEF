@@ -468,3 +468,21 @@ NEF v1.0 is considered successful when:
 
 *NEF — Hydra Native Execution Format · PRD v0.1.0-draft*
 *Hexa / Hydra OS Internal · Not for external distribution*
+
+---
+
+## 20. Repository Build Status (Implemented)
+
+This repository now includes a runnable NEF build pipeline in Python under `src/nef`:
+
+- Lazy tensor graph construction (`nef.tensor`, `nef.add`, `nef.mul`, `nef.matmul`, `nef.softmax`)
+- Deferred execution via `Tensor.execute()` and `Tensor.numpy()`
+- Graph optimizer + device planner + kernel-compiler stubs executed during `Tensor.build()` / `Tensor.execute()`
+- Device planner stub that auto-assigns CPU in the current prototype
+
+### Local build artifact & test
+
+```bash
+PYTHONPATH=src python -m pytest
+PYTHONPATH=src python -c "import nef; a=nef.tensor([[1.0]],dtype=nef.float32); b=nef.tensor([[2.0]],dtype=nef.float32); nef.matmul(a,b).build('model.nef')"
+```
