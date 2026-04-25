@@ -471,17 +471,18 @@ NEF v1.0 is considered successful when:
 
 ---
 
-## 20. Prototype Implementation (This Repository)
+## 20. Repository Build Status (Implemented)
 
-This repository now includes a minimal runnable NEF prototype in Python under `src/nef`:
+This repository now includes a runnable NEF build pipeline in Python under `src/nef`:
 
 - Lazy tensor graph construction (`nef.tensor`, `nef.add`, `nef.mul`, `nef.matmul`, `nef.softmax`)
 - Deferred execution via `Tensor.execute()` and `Tensor.numpy()`
-- CPU runtime execution via stdlib Python kernels (no third-party runtime dependency)
+- Graph optimizer + device planner + kernel-compiler stubs executed during `Tensor.build()` / `Tensor.execute()`
 - Device planner stub that auto-assigns CPU in the current prototype
 
-### Local build & test
+### Local build artifact & test
 
 ```bash
 PYTHONPATH=src python -m pytest
+PYTHONPATH=src python -c "import nef; a=nef.tensor([[1.0]],dtype=nef.float32); b=nef.tensor([[2.0]],dtype=nef.float32); nef.matmul(a,b).build('model.nef')"
 ```

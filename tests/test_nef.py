@@ -1,3 +1,4 @@
+import json
 from math import isclose
 
 import nef
@@ -24,6 +25,7 @@ def test_lazy_execution_and_materialization():
 
     assert out == [5, 7, 9]
     assert c._materialized is True
+    assert c.device == "cpu"
 
 
 def test_matmul_softmax_pipeline():
@@ -40,11 +42,16 @@ def test_matmul_softmax_pipeline():
     assert_nested_close(probs.numpy(), expected_probs)
 
 
-def test_auto_device_assignment_cpu():
-    x = nef.tensor([1.0, 2.0, 3.0])
-    y = nef.tensor([2.0, 3.0, 4.0])
-    z = nef.mul(x, y)
+def test_full_build_emits_nef_artifact(tmp_path):
+    a = nef.tensor([[1.0, 2.0], [3.0, 4.0]])
+    b = nef.tensor([[2.0, 0.0], [1.0, 2.0]])
+    model = nef.softmax(nef.matmul(a, b))
 
-    assert z.device is None
-    z.execute()
-    assert z.device == "cpu"
+    out = model.build(tmp_path / "model.nef")
+    payload = json.loads(out.read_text())
+
+    assert payload["nef_format"] == "graph-v1"
+    assert payload["output"].startswith("node_")
+    assert len(payload["nodes"]) >= 1
+    assert all("assigned_device" in n for n in payload["nodes"])
+    assert payload["nodes"][-1]["op"] in {"softmax", "const"}
