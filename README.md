@@ -408,7 +408,7 @@ NEF is the **execution layer** — everything below the graph, everything above 
 <br/>
 
 **NEF — Neural Essence Format**  
-`v0.1.0-draft` · Hydra OS Internal · [github.com/Hexa08/NEF](https://github.com/Hexa08/NEF)
+`v0.1.0-draft` · HydraLogOS  Internal · [github.com/Hexa08/NEF](https://github.com/Hexa08/NEF)
 
 <br/>
 
