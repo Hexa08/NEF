@@ -21,11 +21,11 @@
 [![Version](https://img.shields.io/badge/Version-0.1.0--draft-f5c842?style=flat-square)](https://github.com/Hexa08/NEF)
 [![Status](https://img.shields.io/badge/Status-Active%20Development-00ff88?style=flat-square)](https://github.com/Hexa08/NEF)
 [![PRD](https://img.shields.io/badge/Spec-PRD%20v0.1-a855f7?style=flat-square)](https://github.com/Hexa08/NEF/blob/main/README.md)
-[![Hydra OS](https://img.shields.io/badge/Runtime-Hydra%20OS-ff4455?style=flat-square)](https://github.com/Hexa08)
+[![HydraLogOS](https://img.shields.io/badge/Runtime-HydraLogOS-ff4455?style=flat-square)](https://github.com/Hexa08)
 
 <br/>
 
-> **Write once. Run anywhere Hydra runs. No device management.**
+> **Write once. Run anywhere HydraLogOS runs. No device management.**
 
 <br/>
 
@@ -37,7 +37,7 @@
 
 NEF is **not** a model format, training framework, or GPU driver wrapper.
 
-It is a **lazy computation graph system** — a complete pipeline from operator definition through device planning, kernel compilation, and hardware execution — targeting heterogeneous compute across CPU, GPU (NVIDIA / AMD / Intel), and NPU, all from a single unified API.
+It is a **lazy computation graph system** — a complete pipeline from operator definition through device planning, kernel compilation, and hardware execution — targeting heterogeneous compute across NVIDIA, AMD, Intel, NPU, and CPU targets with **zero explicit device management from user code**.
 
 ---
 
@@ -106,7 +106,7 @@ NVIDIA GPU   AMD  CPU SIMD   NPU
          │ Execution Runtime │  ←  Async · Parallel · Streamed
          └───────────────────┘
 ```
-[View the live execution pipeline →](https://htmlpreview.github.io/?https://github.com/Hexa08/NEF/blob/main/nef_pipeline_animated.html)
+
 ---
 
 ## Core Components
@@ -215,7 +215,7 @@ Execution triggers:
 
 1. An explicit `.execute()` or `.eval()` call
 2. A Python operation requiring a concrete value (`print(t)`, `t.numpy()`)
-3. Hydra scheduler forcing materialization for downstream consumers
+3. HydraLogOS scheduler forcing materialization for downstream consumers
 
 ---
 
@@ -271,7 +271,7 @@ fmt.Println(c.Numpy())
 
 ## Serialized Graph Format
 
-NEF graphs can be saved to `.nef` files for deployment via the Hydra registry.
+NEF graphs can be saved to `.nef` files for deployment via the HydraLogOS registry.
 
 ```json
 {
@@ -305,9 +305,9 @@ hydra run model.nef
 
 ---
 
-## Hydra OS Integration
+## HydraLogOS Integration
 
-NEF is a first-class subsystem of Hydra OS — not a plugin.
+NEF is a first-class subsystem of HydraLogOS — not a plugin.
 
 ```
 hydra run model.nef
@@ -317,7 +317,7 @@ hydra run model.nef
         ├── resource allocation  (GPU slots · memory budget)
         ├── NEF runtime init     (device detection · graph deserialization)
         ├── execution dispatch   (async graph scheduling)
-        └── result → Hydra scheduler / output consumer
+        └── result → HydraLogOS scheduler / output consumer
 ```
 
 `hydrad` controls NEF lifecycle. NEF exposes a **gRPC control interface** consumed by the scheduler. Graphs can be **preempted, paused, and resumed** mid-execution.
@@ -397,7 +397,7 @@ NEF is the **execution layer** — everything below the graph, everything above 
 ## Security
 
 - No direct hardware access from user code — all execution routes through `hydrad`
-- Execution sandboxed under Hydra's process isolation
+- Execution sandboxed under HydraLogOS's process isolation
 - No arbitrary kernel injection — kernels compiled from whitelisted op templates only
 - Graph validation runs before optimization; malformed graphs are rejected at construction
 
@@ -408,11 +408,11 @@ NEF is the **execution layer** — everything below the graph, everything above 
 <br/>
 
 **NEF — Neural Essence Format**  
-`v0.1.0-draft` · HydraLogOS  Internal · [github.com/Hexa08/NEF](https://github.com/Hexa08/NEF)
+`v0.1.0-draft` · HydraLogOS Internal · [github.com/Hexa08/NEF](https://github.com/Hexa08/NEF)
 
 <br/>
 
-*Built for Hydra OS. Designed to disappear into the hardware.*
+*Built for HydraLogOS. Designed to disappear into the hardware.*
 
 <br/>
 
