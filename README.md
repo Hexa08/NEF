@@ -1,364 +1,284 @@
-# NEF — Hydra Neural Essence Format
-### Product Requirements Document · v0.1.0-draft
+<div align="center">
 
----
-
-## 1. Overview
-
-**NEF** (Neural Essence Format) is the portable computation and execution system for AI workloads inside **Hydra OS**. It is not a model format, not a training framework, and not a GPU driver abstraction. It is a **lazy computation graph system** — a complete pipeline from operator definition through device planning, kernel compilation, and hardware execution — targeting heterogeneous compute: CPU, GPU (NVIDIA / AMD / Intel), and NPU.
-
-NEF's core contract to the developer is simple:
-
-> *Write once. Run anywhere Hydra runs. No device management.*
-
----
-
-## 2. Problem Statement
-
-Running AI workloads across heterogeneous hardware today requires:
-
-- Manual device placement (`tensor.to("cuda")`)
-- Backend-specific code paths (CUDA vs. ROCm vs. CPU)
-- Hand-tuned kernel selection
-- Explicit memory management across devices
-
-This is incompatible with Hydra OS's goal of transparent, scheduler-driven compute. NEF solves this by absorbing all hardware complexity below a single unified API surface.
-
----
-
-## 3. Goals
-
-### 3.1 Primary Goals
-
-| Goal | Description |
-|---|---|
-| **Hardware Unification** | One execution API for CPU, CUDA GPU, ROCm GPU, Intel Arc GPU, and NPU |
-| **Lazy Execution** | Ops build a computation graph; execution defers until `.execute()` or result demand |
-| **Zero Device Management** | Developer never writes device placement code |
-| **Automatic Optimization** | Graph optimizer fuses, folds, and simplifies before compilation |
-| **Hydra-Native Scheduling** | NEF graphs are first-class citizens in `hydrad`'s scheduler |
-
-### 3.2 Secondary Goals
-
-- Sub-millisecond graph planning overhead
-- Zero-copy memory movement where hardware permits
-- Portable serialized graph format for deployment via Hydra registry
-- Graceful CPU fallback for all operations
-
-### 3.3 Non-Goals
-
-NEF is **not**:
-- A replacement for PyTorch / JAX in training workflows
-- A low-level GPU driver or CUDA wrapper
-- A model storage format (≠ GGUF, ONNX, SafeTensors)
-- A distributed training coordinator
-
----
-
-## 4. Architecture
+<br/>
 
 ```
-┌──────────────────────────────────────────────────┐
-│             NEF API  (Python / Go / C++)          │
-└─────────────────────┬────────────────────────────┘
-                       │
-              ┌────────▼────────┐
-              │  Graph Builder  │  ← Lazy IR / DAG
-              └────────┬────────┘
-                       │
-              ┌────────▼────────┐
-              │    Optimizer    │  ← Fusion, folding, simplification
-              └────────┬────────┘
-                       │
-              ┌────────▼────────┐
-              │  Device Planner │  ← Op → hardware assignment
-              └────────┬────────┘
-                       │
-              ┌────────▼────────┐
-              │ Kernel Compiler │  ← Backend-specific lowering
-              └────┬──┬──┬──┬──┘
-                   │  │  │  │
-          ┌────────┘  │  │  └────────┐
-          ▼           ▼  ▼           ▼
-       CUDA GPU    ROCm  CPU SIMD   NPU
-       (NVIDIA)   (AMD) (AVX-512) (Delegate)
-          │           │  │           │
-          └───────────┴──┴───────────┘
-                       │
-              ┌────────▼────────┐
-              │Execution Runtime│  ← Async, parallel, streamed
-              └─────────────────┘
+███╗   ██╗███████╗███████╗
+████╗  ██║██╔════╝██╔════╝
+██╔██╗ ██║█████╗  █████╗  
+██║╚██╗██║██╔══╝  ██╔══╝  
+██║ ╚████║███████╗██║     
+╚═╝  ╚═══╝╚══════╝╚═╝     
 ```
+
+### **Neural Essence Format**
+*The portable computation graph engine for AI workloads inside HydraLogOS *
+
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-00e5ff?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-0.1.0--draft-f5c842?style=flat-square)](https://github.com/Hexa08/NEF)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-00ff88?style=flat-square)](https://github.com/Hexa08/NEF)
+[![PRD](https://img.shields.io/badge/Spec-PRD%20v0.1-a855f7?style=flat-square)](https://github.com/Hexa08/NEF/blob/main/README.md)
+[![HydraLogOS](https://img.shields.io/badge/Runtime-HydraLogOS-ff4455?style=flat-square)](https://github.com/Hexa08)
+
+<br/>
+
+> **Write once. Run anywhere HydraLogOS runs. No device management.**
+
+<br/>
+
+</div>
 
 ---
 
-## 5. Core Components
+## What is NEF?
 
-### 5.1 NEF API Layer
+NEF is **not** a model format, training framework, or GPU driver wrapper.
 
-The developer-facing interface. Responsible for tensor creation, operator registration, and graph construction. No execution happens at this layer.
+It is a **lazy computation graph system** — a complete pipeline from operator definition through device planning, kernel compilation, and hardware execution — targeting heterogeneous compute across NVIDIA, AMD, Intel, NPU, and CPU targets with **zero explicit device management from user code**.
 
-**Python Example:**
+---
+
+## The Problem It Solves
+
+Running AI workloads on heterogeneous hardware today means writing this kind of code:
+
+```python
+# Without NEF — you manage everything manually
+tensor = tensor.to("cuda:0")                         # device hell
+if torch.cuda.is_available():
+    kernel = cuda_kernel(tensor)                     # backend-specific paths
+elif rocm_available():
+    kernel = rocm_kernel(tensor)                     # more branching
+memory_pool.pin(tensor)                              # manual memory
+torch.cuda.synchronize()                             # explicit sync
+```
+
+**NEF eliminates all of it:**
+
 ```python
 import nef
 
-a = nef.tensor([1, 2, 3], dtype=nef.float32)
-b = nef.tensor([4, 5, 6], dtype=nef.float32)
+a = nef.tensor([[1.0, 2.0], [3.0, 4.0]], dtype=nef.float32)
+b = nef.tensor([[5.0, 6.0], [7.0, 8.0]], dtype=nef.float32)
 
-c = nef.matmul(a, b)   # No execution yet — graph node created
-c.execute()            # Graph is optimized, compiled, and run
+c = nef.matmul(a, b)   # ← no execution yet. graph node created.
+c.execute()            # ← optimizer → planner → compiler → hardware. done.
 ```
 
-**Go Example:**
-```go
-a := nef.Tensor([]float32{1, 2, 3})
-b := nef.Tensor([]float32{4, 5, 6})
-c := nef.MatMul(a, b)
-c.Execute()
-```
+No `tensor.to("cuda")`. No backend conditionals. No memory calls.
 
 ---
 
-### 5.2 Graph Builder (IR Layer)
+## Architecture
 
-Converts API calls into an internal computation graph.
+```
+┌─────────────────────────────────────────┐
+│          NEF API  (Python / Go)         │
+└──────────────────┬──────────────────────┘
+                   │
+         ┌─────────▼─────────┐
+         │   Graph Builder   │  ←  Lazy DAG / IR
+         └─────────┬─────────┘
+                   │
+         ┌─────────▼─────────┐
+         │     Optimizer     │  ←  Fusion · Folding · Elimination
+         └─────────┬─────────┘
+                   │
+         ┌─────────▼─────────┐
+         │   Device Planner  │  ←  Op → Hardware assignment
+         └─────────┬─────────┘
+                   │
+         ┌─────────▼─────────┐
+         │  Kernel Compiler  │  ←  Backend-specific lowering
+         └──┬──┬──┬──┬───────┘
+            │  │  │  │
+   ┌────────┘  │  │  └────────┐
+   ▼           ▼  ▼           ▼
+NVIDIA GPU   AMD  CPU SIMD   NPU
+(CUDA/PTX) (ROCm)(AVX-512) (Vendor)
+   │           │  │           │
+   └───────────┴──┴───────────┘
+                   │
+         ┌─────────▼─────────┐
+         │ Execution Runtime │  ←  Async · Parallel · Streamed
+         └───────────────────┘
+```
+<div align="center">
 
-- **Structure:** Directed Acyclic Graph (DAG)
-- **Nodes:** Individual ops (MatMul, Softmax, LayerNorm, etc.)
-- **Edges:** Tensor dependencies between ops
-- **Properties:** Node metadata — shape, dtype, estimated FLOPs, preferred device hint
-
-The IR is device-agnostic at construction time. No hardware decisions are made here.
-
+<div align="center">
+  <img src="assets/nef_pipeline.gif" width="480" alt="NEF Execution Pipeline" />
+  <br/>
+  <a href="https://Hexa08.github.io/NEF/nef_pipeline_animated.html">▶ Open live interactive version</a>
+</div>
 ---
 
-### 5.3 Optimizer Layer
+## Core Components
 
-Transforms the raw computation graph before compilation. Runs a sequence of passes:
+<details>
+<summary><strong>① Graph Builder — Lazy IR Layer</strong></summary>
 
-| Pass | Description |
+<br/>
+
+Converts API calls into a **Directed Acyclic Graph (DAG)**. No hardware decisions happen here. No execution happens here. Every op call simply extends the graph.
+
+- **Nodes** — individual ops (MatMul, Softmax, LayerNorm, RMSNorm …)  
+- **Edges** — tensor dependencies between nodes  
+- **Metadata** — shape, dtype, estimated FLOPs, device hint  
+
+```python
+a = nef.tensor([1, 2, 3])
+b = nef.tensor([4, 5, 6])
+c = nef.matmul(a, b)    # → DAG node added. Nothing ran.
+d = nef.softmax(c)      # → DAG node added. Nothing ran.
+                        # Graph: a,b → matmul → softmax → d
+```
+
+</details>
+
+<details>
+<summary><strong>② Optimizer — Graph Transformation Passes</strong></summary>
+
+<br/>
+
+Runs a deterministic sequence of passes before compilation. Does not alter numerical output beyond floating-point rounding equivalence.
+
+| Pass | What it does |
 |---|---|
-| **Node Fusion** | Fuse adjacent elementwise ops into single kernel |
-| **Constant Folding** | Pre-compute static subgraphs at compile time |
-| **Dead Node Elimination** | Remove ops whose output is never consumed |
-| **Memory Reuse** | Identify tensors that can share memory buffers |
-| **Operator Simplification** | Replace expensive ops with mathematically equivalent cheaper forms |
+| **Node Fusion** | Adjacent elementwise ops collapse into a single kernel |
+| **Constant Folding** | Static subgraphs computed at compile time |
+| **Dead Node Elimination** | Unreachable nodes removed from graph |
+| **Memory Reuse** | Tensors that can share buffers are identified |
+| **Op Simplification** | Expensive ops replaced with cheaper equivalents |
 
-Optimization is deterministic and does not alter numerical output beyond floating-point rounding equivalence.
+</details>
 
----
+<details>
+<summary><strong>③ Device Planner — Hardware Assignment</strong></summary>
 
-### 5.4 Device Planner
+<br/>
 
-Assigns each graph node to a hardware target. Rules are heuristic-based with override support:
+Maps each graph node to the best available hardware target. Heuristic-driven, with developer override support.
 
-| Op Pattern | Default Target | Rationale |
+| Op Pattern | Default Target | Why |
 |---|---|---|
-| Large MatMul (≥ 1M params) | CUDA / ROCm GPU | Parallelism advantage |
-| Transformer Attention | GPU / NPU | Memory bandwidth bound |
-| Small elementwise ops | CPU SIMD | GPU launch overhead > compute cost |
-| Quantized inference ops | NPU (if present) | NPU power efficiency |
-| All else (fallback) | CPU SIMD | Correctness guarantee |
+| Large MatMul (≥ 1M params) | CUDA / ROCm GPU | Parallelism |
+| Transformer Attention | GPU / NPU | Memory-bandwidth bound |
+| Small elementwise ops | CPU SIMD | GPU launch overhead > cost |
+| Quantized ops | NPU (if present) | Power efficiency |
+| Everything else | CPU SIMD | Correctness fallback |
 
-The planner also handles **placement boundaries** — inserting memory transfer nodes between ops assigned to different devices.
+Inserts **memory transfer nodes** automatically at device boundaries.
 
----
+</details>
 
-### 5.5 Kernel Compiler
+<details>
+<summary><strong>④ Kernel Compiler — Backend Lowering</strong></summary>
 
-Lowers abstract ops to backend-specific executable kernels.
+<br/>
 
-**Supported backends:**
+Lowers abstract ops to backend-specific executable kernels. Results are cached by `(op_type, shape, dtype, backend)` — warm re-execution skips compilation entirely.
 
-| Backend | Target Hardware | Compilation Path |
+| Backend | Target | Compilation path |
 |---|---|---|
 | CUDA | NVIDIA GPUs | PTX / cuBLAS / cuDNN |
 | ROCm | AMD GPUs | HIP / hipBLAS |
-| Level Zero / oneAPI | Intel Arc GPUs | SPIR-V |
+| Level Zero | Intel Arc GPUs | SPIR-V |
 | CPU SIMD | x86-64 / ARM | AVX2 / AVX-512 / NEON |
-| NPU Delegate | Qualcomm / Apple ANE / etc. | Vendor SDK |
+| NPU Delegate | Qualcomm / Apple ANE | Vendor SDK |
 
-The compiler caches compiled kernels keyed by `(op_type, shape, dtype, backend)`. On re-execution with the same graph signature, no recompilation occurs.
+</details>
+
+<details>
+<summary><strong>⑤ Execution Runtime — Async Graph Dispatch</strong></summary>
+
+<br/>
+
+- **Parallel scheduling** — independent branches execute concurrently  
+- **Async dispatch** — non-blocking kernel launch with explicit sync barriers  
+- **Stream management** — per-device CUDA/HIP streams; CPU thread pool  
+- **Memory coordination** — host↔device transfers inserted at boundary nodes  
+- **Materialization** — tensors pulled to CPU memory only when accessed  
+
+</details>
 
 ---
 
-### 5.6 Execution Runtime
+## Lazy Execution Model
 
-Executes the compiled graph:
-
-- **Parallel scheduling:** Independent graph branches execute concurrently
-- **Async execution:** Non-blocking kernel dispatch with explicit synchronization barriers
-- **Stream management:** Per-device CUDA/HIP streams; CPU thread pool
-- **Memory coordination:** Automatic host↔device transfers at boundary nodes
-- **Result materialization:** Tensors are pulled to CPU memory only when explicitly accessed
-
----
-
-## 6. Lazy Execution Model
-
-NEF follows a **define-then-run** model, identical in philosophy to JAX's JIT and MLX's lazy evaluation.
+NEF follows **define-then-run**, identical in philosophy to JAX JIT and MLX lazy evaluation.
 
 ```
-nef.matmul(a, b)   →  DAG node added. No compute.
-nef.softmax(c)     →  DAG node added. No compute.
-d.execute()        →  Full graph optimized, compiled, executed.
+nef.matmul(a, b)    →  graph node added.  zero compute.
+nef.softmax(c)      →  graph node added.  zero compute.
+nef.layernorm(d)    →  graph node added.  zero compute.
+result.execute()    →  full graph: optimized → compiled → dispatched.
 ```
 
-Execution is triggered by:
-1. An explicit `.execute()` / `.eval()` call
-2. A Python operation that requires a concrete value (e.g., `print(tensor)`, `numpy()`)
-3. Hydra scheduler forcing materialization for downstream consumers
+Execution triggers:
+
+1. An explicit `.execute()` or `.eval()` call
+2. A Python operation requiring a concrete value (`print(t)`, `t.numpy()`)
+3. HydraLogOS scheduler forcing materialization for downstream consumers
 
 ---
 
-## 7. Tensor System
+## Supported Hardware
 
-```python
-class Tensor:
-    shape: Tuple[int, ...]       # e.g. (1024, 4096)
-    dtype: DType                 # float32 | float16 | bfloat16 | int8 | ...
-    device: Optional[Device]     # None = auto-assigned by Device Planner
-    graph_node: GraphNode        # Reference into the computation DAG
-    _materialized: bool          # False until .execute() completes
-```
+<div align="center">
 
-Tensors are **views into the graph** until materialized. Slicing, reshaping, and transposing produce new graph nodes, not new memory allocations.
+| Platform | Backend | Status |
+|:---:|:---:|:---:|
+| 🟢 NVIDIA GPU | CUDA / PTX / cuBLAS | `active` |
+| 🟢 AMD GPU | ROCm / HIP / hipBLAS | `active` |
+| 🟡 Intel Arc GPU | Level Zero / SPIR-V | `planned` |
+| 🟢 CPU (x86-64) | AVX2 / AVX-512 / VNNI | `active` |
+| 🟢 CPU (ARM) | NEON / SVE | `active` |
+| 🟡 NPU | Qualcomm QNN / Apple ANE | `planned` |
+| ⚪ WASM | Browser / Edge | `future` |
 
----
-
-## 8. Memory Model
-
-NEF provides a unified memory abstraction across all devices:
-
-- **Automatic migration:** Tensors move between CPU/GPU/NPU as the planner requires
-- **Zero-copy:** When hardware supports unified memory (e.g., Apple Silicon, some NVIDIA configs), transfers are avoided entirely
-- **Intermediate caching:** Frequently accessed intermediate tensors are optionally pinned to avoid recomputation
-- **Eviction policy:** LRU-based cache eviction under memory pressure, configurable per-device
+</div>
 
 ---
 
-## 9. Device Detection
+## Performance Targets
 
-At runtime initialization, NEF performs hardware enumeration:
+<div align="center">
 
-```
-NEF Device Scan
-├── GPU: nvidia-smi / rocm-smi / level-zero enumeration
-│   ├── VRAM capacity
-│   ├── Compute capability / arch
-│   └── NVLINK / PCIe topology
-├── CPU: CPUID
-│   ├── AVX / AVX2 / AVX-512 / VNNI support
-│   └── Core count / NUMA topology
-└── NPU: Vendor SDK probes
-    ├── Qualcomm QNN
-    ├── Apple ANE (via CoreML)
-    └── Intel NPU (via OpenVINO)
-```
+| Metric | Target |
+|:---|:---|
+| Graph planning overhead | `< 1ms` for graphs ≤ 10K nodes |
+| GPU utilization (LLM inference) | `≥ 85%` sustained |
+| Kernel cache hit rate (warm) | `≥ 95%` |
+| CPU fallback penalty vs GPU | `≤ 2×` for ops ≤ 1M elements |
+| Memory transfer overhead | Zero-copy where supported; otherwise `< 5%` of total |
 
-Detection results are cached for the process lifetime. Manual overrides available via environment variables or `nef.config()`.
+</div>
 
 ---
 
-## 10. Backend Interface Contract
-
-All backends implement the following interface (Go canonical form):
+## Go API
 
 ```go
-type Backend interface {
-    // Core linear algebra
-    MatMul(a, b Tensor) Tensor
-    Add(a, b Tensor) Tensor
-    Mul(a, b Tensor) Tensor
+import "github.com/Hexa08/NEF"
 
-    // Attention primitives
-    Attention(q, k, v Tensor, mask *Tensor, scale float32) Tensor
-    FlashAttention(q, k, v Tensor) Tensor  // optional, if supported
+a := nef.Tensor([]float32{1, 2, 3, 4}, []int{2, 2})
+b := nef.Tensor([]float32{5, 6, 7, 8}, []int{2, 2})
 
-    // Activation functions
-    Softmax(x Tensor, dim int) Tensor
-    GELU(x Tensor) Tensor
-    SiLU(x Tensor) Tensor
+c := nef.MatMul(a, b)
+c.Execute()
 
-    // Normalization
-    LayerNorm(x, weight, bias Tensor, eps float32) Tensor
-    RMSNorm(x, weight Tensor, eps float32) Tensor
-
-    // Memory ops
-    Allocate(shape []int, dtype DType) Tensor
-    Free(t Tensor)
-    Transfer(t Tensor, dst Device) Tensor
-
-    // Backend info
-    Name() string
-    Device() Device
-    Capabilities() BackendCaps
-}
-```
-
-Backends that don't support an op return `ErrNotSupported`; the Device Planner reroutes that node to the next eligible backend.
-
----
-
-## 11. Execution Pipeline (End-to-End)
-
-```
-1. User Code
-   └─ nef.matmul(a, b) → graph node
-
-2. Lazy Graph Construction
-   └─ DAG grows with each op call
-
-3. .execute() triggered
-   │
-   ├─ 4. Optimizer passes (fusion, folding, elimination)
-   │
-   ├─ 5. Device Planner (op → hardware assignment)
-   │
-   ├─ 6. Kernel Compiler (abstract op → backend kernel)
-   │      └─ Cache hit? → skip recompilation
-   │
-   └─ 7. Execution Runtime
-          ├─ Async dispatch to device streams
-          ├─ Memory transfers at device boundaries
-          └─ Synchronization → result materialization
+fmt.Println(c.Numpy())
 ```
 
 ---
 
-## 12. Hydra OS Integration
+## Serialized Graph Format
 
-NEF is a first-class subsystem of Hydra OS, not a plugin.
+NEF graphs can be saved to `.nef` files for deployment via the HydraLogOS registry.
 
-```
-hydra run model.nef
-        │
-        ▼
-    hydrad daemon
-        │
-        ├─ Resource allocation (GPU slots, memory budget)
-        ├─ NEF runtime initialization
-        │       │
-        │       ├─ Device detection
-        │       ├─ Graph deserialization (if .nef file)
-        │       └─ Execution dispatch
-        │
-        └─ Result → Hydra scheduler / output consumer
-```
-
-**Integration surface:**
-- `hydrad` controls NEF process lifecycle and resource limits
-- Hydra model registry stores serialized `.nef` graph files
-- Hydra scheduler can preempt, pause, and resume NEF execution graphs
-- NEF exposes a gRPC control interface consumed by `hydrad`
-
----
-
-## 13. Serialized Graph Format (Optional)
-
-NEF can optionally serialize a compiled graph to disk for deployment. This is not required for in-process execution.
-
-**File: `model.nef`**
 ```json
 {
   "version": "1.0",
@@ -373,9 +293,7 @@ NEF can optionally serialize a compiled graph to disk for deployment. This is no
         "preferred_device": "gpu"
       }
     ],
-    "edges": [
-      { "from": "node_0", "to": "node_1" }
-    ]
+    "edges": [{ "from": "node_0", "to": "node_1" }]
   },
   "tensors": {
     "tensor_a": { "shape": [1024, 4096], "dtype": "float16" }
@@ -385,112 +303,123 @@ NEF can optionally serialize a compiled graph to disk for deployment. This is no
 }
 ```
 
-The serialized format is used by the Hydra registry for model distribution and by `hydrad` for precompiled deployment.
-
----
-
-## 14. Failure Handling
-
-| Failure Mode | NEF Response |
-|---|---|
-| GPU out of memory | Evict cache → retry on smaller batch → fallback to CPU |
-| Backend compilation failure | Log error → reroute to CPU fallback → continue |
-| NPU probe failure at init | Silently disable NPU; proceed with GPU/CPU |
-| Graph cycle detected | Raise `NEFGraphCycleError` at construction time |
-| Partial graph failure | Rollback completed nodes; recompute from last checkpoint |
-| `hydrad` preemption signal | Serialize in-progress graph state; resume on restart |
-
-All failures are surfaced through structured error types. No silent corruption.
-
----
-
-## 15. Security Model
-
-- **No direct hardware access from user code.** All execution goes through `hydrad`.
-- **Execution sandboxed** under Hydra's process isolation.
-- **No arbitrary kernel injection.** Backend kernels are compiled from whitelisted op templates only.
-- **Backend isolation layer:** User-defined ops cannot bypass the Backend interface contract.
-- **Graph validation** runs before optimization to reject malformed or adversarially crafted graphs.
-
----
-
-## 16. Performance Targets
-
-| Metric | Target |
-|---|---|
-| Graph planning overhead | < 1ms for graphs ≤ 10K nodes |
-| GPU utilization (LLM inference) | ≥ 85% |
-| CPU fallback penalty vs GPU | ≤ 2× for ops ≤ 1M elements |
-| Kernel cache hit rate (warm) | ≥ 95% |
-| Memory transfer overhead | Zero-copy where hardware allows; otherwise < 5% of total exec time |
-
----
-
-## 17. Future Extensions
-
-| Feature | Priority | Notes |
-|---|---|---|
-| Distributed NEF (multi-node) | High | Tensor parallel + pipeline parallel across nodes |
-| Streaming graphs | High | Real-time LLM token-by-token execution |
-| Quantization-aware execution | Medium | INT4/INT8 graph lowering with calibration support |
-| Federated compute | Low | Split execution across untrusted nodes |
-| Dynamic shape support | Medium | Variable-length sequences without recompilation |
-| WASM backend | Low | Browser / edge inference |
-
----
-
-## 18. Success Criteria
-
-NEF v1.0 is considered successful when:
-
-- [ ] Same Python/Go code runs on CPU, CUDA GPU, ROCm GPU, and NPU without modification
-- [ ] No developer-written device placement code in any test workload
-- [ ] Full LLM inference (7B parameter transformer) runs end-to-end via NEF on GPU
-- [ ] `hydrad` can schedule, preempt, and resume NEF workloads natively
-- [ ] Kernel cache achieves ≥ 95% hit rate on warm re-execution
-- [ ] GPU utilization ≥ 85% sustained on transformer attention workloads
-
----
-
-## 19. Glossary
-
-| Term | Definition |
-|---|---|
-| **DAG** | Directed Acyclic Graph — the internal graph structure NEF uses to represent computation |
-| **IR** | Intermediate Representation — the hardware-agnostic op graph before compilation |
-| **Lazy Execution** | Computation is deferred; ops define graph nodes and do not run until execution is triggered |
-| **hydrad** | The Hydra OS daemon responsible for resource management and scheduling |
-| **Backend** | A hardware-specific execution implementation (CUDA, ROCm, CPU SIMD, NPU) |
-| **Kernel** | A compiled, backend-specific function that executes a single op on hardware |
-| **Materialization** | The act of executing a lazy tensor graph and producing a concrete value in memory |
-
----
-
-*NEF — Hydra Neural Essence Format · PRD v0.1.0-draft*
-*Hexa / Hydra OS Internal · Not for external distribution*
-
----
-
-## 20. Repository Build Status (Implemented)
-
-This repository now includes a runnable NEF build pipeline in Python under `src/nef`:
-
-- Lazy tensor graph construction (`nef.tensor`, `nef.add`, `nef.mul`, `nef.matmul`, `nef.softmax`)
-- Deferred execution via `Tensor.execute()`, `Tensor.eval()`, and `Tensor.value()` (`Tensor.numpy()` is a stub until a NumPy backend is implemented)
-- Graph optimizer + device planner + kernel-compiler stubs executed during `Tensor.build()` / `Tensor.execute()`
-- Deterministic heuristic device planner with CPU default and GPU selection for large matmul workloads
-
-### One-command setup
+Deploy with:
 
 ```bash
-./setup_nef.sh
+hydra run model.nef
 ```
 
-The setup script creates `.venv`, installs NEF with dev dependencies, and runs the test suite.
+---
 
-### Local build artifact & test
+## HydraLogOS Integration
+
+NEF is a first-class subsystem of HydraLogOS — not a plugin.
+
+```
+hydra run model.nef
+        │
+        ▼
+    hydrad daemon
+        ├── resource allocation  (GPU slots · memory budget)
+        ├── NEF runtime init     (device detection · graph deserialization)
+        ├── execution dispatch   (async graph scheduling)
+        └── result → HydraLogOS scheduler / output consumer
+```
+
+`hydrad` controls NEF lifecycle. NEF exposes a **gRPC control interface** consumed by the scheduler. Graphs can be **preempted, paused, and resumed** mid-execution.
+
+---
+
+## Failure Handling
+
+| Failure | Response |
+|---|---|
+| GPU out of memory | Evict cache → retry on smaller batch → CPU fallback |
+| Backend compile failure | Log → reroute to CPU → continue |
+| NPU probe failure | Silently disable NPU; proceed with GPU/CPU |
+| Graph cycle detected | `NEFGraphCycleError` raised at construction time |
+| `hydrad` preemption | Serialize in-progress graph state; resume on restart |
+
+No silent corruption. All failures surface through structured error types.
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/Hexa08/NEF
+cd NEF
+pip install -e .
+```
+
+Run the test suite:
 
 ```bash
 PYTHONPATH=src python -m pytest
-PYTHONPATH=src python -c "import nef; a=nef.tensor([[1.0]],dtype=nef.float32); b=nef.tensor([[2.0]],dtype=nef.float32); nef.matmul(a,b).build('model.nef')"
 ```
+
+Build a `.nef` file:
+
+```bash
+PYTHONPATH=src python -c "
+import nef
+a = nef.tensor([[1.0]], dtype=nef.float32)
+b = nef.tensor([[2.0]], dtype=nef.float32)
+nef.matmul(a, b).build('model.nef')
+"
+```
+
+---
+
+## Roadmap
+
+- [x] Lazy tensor graph construction
+- [x] Deferred execution via `.execute()` / `.numpy()`
+- [x] Graph optimizer + device planner stubs
+- [x] Kernel compiler pipeline (CPU path)
+- [ ] CUDA backend integration
+- [ ] ROCm backend integration
+- [ ] Distributed NEF (multi-node tensor/pipeline parallel)
+- [ ] Streaming graphs (real-time token-by-token LLM execution)
+- [ ] Quantization-aware execution (INT4 / INT8)
+- [ ] Dynamic shape support (variable-length sequences)
+- [ ] WASM backend (browser / edge inference)
+
+---
+
+## What NEF Is NOT
+
+> Clarifying the scope to avoid confusion.
+
+- ❌ Not a replacement for PyTorch / JAX in training workflows
+- ❌ Not a low-level GPU driver or CUDA wrapper
+- ❌ Not a model storage format (≠ GGUF, ONNX, SafeTensors)
+- ❌ Not a distributed training coordinator
+
+NEF is the **execution layer** — everything below the graph, everything above the hardware.
+
+---
+
+## Security
+
+- No direct hardware access from user code — all execution routes through `hydrad`
+- Execution sandboxed under HydraLogOS's process isolation
+- No arbitrary kernel injection — kernels compiled from whitelisted op templates only
+- Graph validation runs before optimization; malformed graphs are rejected at construction
+
+---
+
+<div align="center">
+
+<br/>
+
+**NEF — Neural Essence Format**  
+`v0.1.0-draft` · HydraLogOS Internal · [github.com/Hexa08/NEF](https://github.com/Hexa08/NEF)
+
+<br/>
+
+*Built for HydraLogOS. Designed to disappear into the hardware.*
+
+<br/>
+
+</div>
