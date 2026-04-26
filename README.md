@@ -106,7 +106,7 @@ NVIDIA GPU   AMD  CPU SIMD   NPU
          │ Execution Runtime │  ←  Async · Parallel · Streamed
          └───────────────────┘
 ```
-
+[View the live execution pipeline →](https://Hexa08.github.io/NEF/nef_pipeline_animated.html)
 ---
 
 ## Core Components
