@@ -108,10 +108,10 @@ NVIDIA GPU   AMD  CPU SIMD   NPU
 ```
 <div align="center">
 
-![NEF Pipeline — Interactive Execution Visualizer](https://image.thum.io/get/width/600/crop/900/https://Hexa08.github.io/NEF/nef_pipeline_animated.html)
-
-*[▶ Open live interactive version](https://Hexa08.github.io/NEF/nef_pipeline_animated.html)*
-
+<div align="center">
+  <img src="assets/pipeline.gif" width="480" alt="NEF Execution Pipeline" />
+  <br/>
+  <a href="https://Hexa08.github.io/NEF/nef_pipeline_animated.html">▶ Open live interactive version</a>
 </div>
 ---
 
