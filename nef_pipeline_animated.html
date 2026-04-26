@@ -1,0 +1,212 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+.wrap{font-family:'JetBrains Mono',monospace;padding:28px 16px 32px;max-width:580px;margin:0 auto}
+.title{text-align:center;font-size:13px;font-weight:700;color:var(--color-text-primary);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+.subtitle{text-align:center;font-size:10px;color:var(--color-text-secondary);letter-spacing:.08em;margin-bottom:28px}
+.pipeline{position:relative;display:flex;flex-direction:column;align-items:center;gap:0}
+.row{position:relative;width:100%;display:flex;justify-content:center;align-items:center}
+/* connector track */
+.connector{position:relative;display:flex;flex-direction:column;align-items:center;height:40px;width:100%}
+.track{width:2px;height:40px;background:var(--color-border-secondary);position:relative;overflow:visible}
+/* flowing dots */
+.dot{position:absolute;width:8px;height:8px;border-radius:50%;left:50%;transform:translateX(-50%);animation:flow 1.8s linear infinite}
+.dot:nth-child(1){animation-delay:0s}
+.dot:nth-child(2){animation-delay:.6s}
+.dot:nth-child(3){animation-delay:1.2s}
+@keyframes flow{0%{top:-8px;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:calc(100% + 8px);opacity:0}}
+/* node box */
+.node{position:relative;width:260px;border-radius:6px;padding:10px 16px;cursor:pointer;transition:filter .2s,transform .15s}
+.node:hover{filter:brightness(1.15);transform:scale(1.03)}
+.node-id{font-size:9px;font-weight:700;letter-spacing:.18em;opacity:.75;text-transform:uppercase;margin-bottom:3px}
+.node-name{font-size:14px;font-weight:700;line-height:1.2}
+.node-sub{font-size:10px;opacity:.75;margin-top:2px;font-weight:400}
+/* side label */
+.side{position:absolute;right:-140px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--color-text-secondary);width:130px;line-height:1.4;text-align:left}
+.side-left{position:absolute;left:-140px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--color-text-secondary);width:130px;text-align:right;line-height:1.4}
+/* horizontal lane for optimizer block */
+.horiz-row{display:flex;flex-direction:row;gap:0;align-items:center;justify-content:center;width:100%}
+.horiz-track{width:32px;height:2px;background:var(--color-border-secondary);position:relative;overflow:hidden}
+.horiz-dot{position:absolute;width:8px;height:8px;border-radius:50%;top:50%;transform:translateY(-50%);animation:hflow 1.4s linear infinite}
+.horiz-dot:nth-child(1){animation-delay:0s}
+.horiz-dot:nth-child(2){animation-delay:.7s}
+@keyframes hflow{0%{left:-8px;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:calc(100% + 8px);opacity:0}}
+/* region box */
+.region{border:1px dashed var(--color-border-secondary);border-radius:8px;padding:14px 16px 14px;width:330px;position:relative;margin:0 auto}
+.region-label{position:absolute;top:-9px;left:12px;font-size:9px;letter-spacing:.15em;color:var(--color-text-secondary);background:var(--color-background-primary);padding:0 6px;text-transform:uppercase}
+/* loop arrow */
+.loop-svg{position:absolute;right:-20px;top:0;height:100%;pointer-events:none}
+/* colors */
+.cyan  {background:#0e3a45;border:1px solid #1a7a8a;color:#7de8f5}
+.teal  {background:#0a3530;border:1px solid #1a6a60;color:#5dd8c0}
+.purple{background:#2a1a45;border:1px solid #5535a0;color:#c0a0f5}
+.orange{background:#3a2010;border:1px solid #8a4a15;color:#f5a060}
+.gold  {background:#352800;border:1px solid #806010;color:#f0c535}
+.green {background:#0a3020;border:1px solid #1a7040;color:#50e090}
+.red   {background:#3a1010;border:1px solid #883030;color:#f07070}
+/* dot colors */
+.dc-cyan{background:#7de8f5;box-shadow:0 0 6px #7de8f580}
+.dc-teal{background:#5dd8c0;box-shadow:0 0 6px #5dd8c080}
+.dc-purple{background:#c0a0f5;box-shadow:0 0 6px #c0a0f580}
+.dc-orange{background:#f5a060;box-shadow:0 0 6px #f5a06080}
+.dc-gold{background:#f0c535;box-shadow:0 0 6px #f0c53580}
+.dc-green{background:#50e090;box-shadow:0 0 6px #50e09080}
+/* tooltip */
+.tooltip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--color-background-secondary);border:1px solid var(--color-border-secondary);border-radius:6px;padding:8px 12px;font-size:10px;color:var(--color-text-primary);white-space:nowrap;z-index:10;pointer-events:none;line-height:1.6}
+.node:hover .tooltip{display:block}
+/* hardware row */
+.hw-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:2px}
+.hw-chip{font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:.05em}
+</style>
+
+<div class="wrap">
+  <div class="title">NEF — Neural Essence Format</div>
+  <div class="subtitle">execution pipeline · click any node · dots show live data flow</div>
+
+  <div class="pipeline" id="pipe">
+
+    <!-- 01 INPUT -->
+    <div class="row">
+      <div class="node cyan" onclick="ping(this,'01 — User Code / API Call')">
+        <div class="tooltip">nef.matmul(a,b) → graph node<br>No execution at this stage</div>
+        <div class="node-id">01 — INPUT</div>
+        <div class="node-name">User Code · API Call</div>
+        <div class="node-sub">Python / Go / C++</div>
+      </div>
+      <div class="side">raw tensor ops<br>↳ no compute yet</div>
+    </div>
+
+    <div class="connector"><div class="track" style="height:36px"><div class="dot dc-cyan"></div><div class="dot dc-cyan"></div><div class="dot dc-cyan"></div></div></div>
+
+    <!-- 02 GRAPH BUILDER -->
+    <div class="row">
+      <div class="node teal" onclick="ping(this,'02 — Graph Builder')">
+        <div class="tooltip">Builds DAG of ops with shape,<br>dtype, FLOPs metadata. Device-agnostic.</div>
+        <div class="node-id">02 — GRAPH BUILDER</div>
+        <div class="node-name">Lazy DAG / IR</div>
+        <div class="node-sub">Directed Acyclic Graph · no execution</div>
+      </div>
+      <div class="side">nodes = ops<br>edges = tensors</div>
+    </div>
+
+    <div class="connector"><div class="track" style="height:36px"><div class="dot dc-teal"></div><div class="dot dc-teal"></div><div class="dot dc-teal"></div></div></div>
+
+    <!-- OPTIMIZER BLOCK -->
+    <div class="row" style="flex-direction:column;gap:10px">
+      <div class="region">
+        <div class="region-label">OPTIMIZER PASSES</div>
+        <div class="horiz-row">
+          <div class="node purple" style="width:118px;padding:9px 10px" onclick="ping(this,'Fusion pass')">
+            <div class="tooltip">Merges adjacent<br>elementwise ops</div>
+            <div class="node-id">03A</div>
+            <div class="node-name" style="font-size:11px">Node Fusion</div>
+            <div class="node-sub">+ Constant Fold</div>
+          </div>
+          <div class="horiz-track"><div class="horiz-dot" style="background:#c0a0f5;box-shadow:0 0 5px #c0a0f580"></div><div class="horiz-dot" style="background:#c0a0f5;box-shadow:0 0 5px #c0a0f580;animation-delay:.7s"></div></div>
+          <div class="node purple" style="width:118px;padding:9px 10px" onclick="ping(this,'Elimination pass')">
+            <div class="tooltip">Removes dead nodes,<br>finds memory reuse</div>
+            <div class="node-id">03B</div>
+            <div class="node-name" style="font-size:11px">Dead Elim.</div>
+            <div class="node-sub">+ Mem Reuse</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="track" style="height:36px"><div class="dot dc-purple"></div><div class="dot dc-purple"></div><div class="dot dc-purple"></div></div></div>
+
+    <!-- 04 DEVICE PLANNER -->
+    <div class="row">
+      <div class="node orange" onclick="ping(this,'04 — Device Planner')">
+        <div class="tooltip">Heuristic op→hw mapping.<br>Inserts memory transfer nodes.</div>
+        <div class="node-id">04 — DEVICE PLANNER</div>
+        <div class="node-name">Hardware Assignment</div>
+        <div class="node-sub">MatMul→GPU · Quant→NPU · fallback→CPU</div>
+      </div>
+      <div class="side">zero device<br>management API</div>
+    </div>
+
+    <div class="connector"><div class="track" style="height:36px"><div class="dot dc-orange"></div><div class="dot dc-orange"></div><div class="dot dc-orange"></div></div></div>
+
+    <!-- 05 KERNEL COMPILER -->
+    <div class="row">
+      <div class="node gold" onclick="ping(this,'05 — Kernel Compiler')">
+        <div class="tooltip">Cached by (op, shape, dtype, backend).<br>Warm re-run = zero recompile.</div>
+        <div class="node-id">05 — KERNEL COMPILER</div>
+        <div class="node-name">Backend Lowering</div>
+        <div class="node-sub">PTX · HIP · SPIR-V · AVX-512 · NPU SDK</div>
+      </div>
+      <div class="side-left">kernel cache<br>≥ 95% hit rate</div>
+      <div class="side">compile once<br>run forever</div>
+    </div>
+
+    <div class="connector"><div class="track" style="height:36px"><div class="dot dc-gold"></div><div class="dot dc-gold"></div><div class="dot dc-gold"></div></div></div>
+
+    <!-- 06 EXECUTION RUNTIME -->
+    <div class="row">
+      <div class="node green" onclick="ping(this,'06 — Execution Runtime')">
+        <div class="tooltip">Async dispatch · parallel branches<br>· zero-copy where hw supports</div>
+        <div class="node-id">06 — EXECUTION RUNTIME</div>
+        <div class="node-name">Async Graph Dispatch</div>
+        <div class="node-sub">parallel streams · mem transfer · sync barriers</div>
+      </div>
+      <div class="side">GPU util<br>≥ 85% sustained</div>
+    </div>
+
+    <div class="connector"><div class="track" style="height:36px"><div class="dot dc-green"></div><div class="dot dc-green"></div><div class="dot dc-green"></div></div></div>
+
+    <!-- 07 OUTPUT -->
+    <div class="row">
+      <div class="node cyan" onclick="ping(this,'07 — Materialized Output')">
+        <div class="tooltip">Tensor pulled to CPU memory<br>only when explicitly accessed</div>
+        <div class="node-id">07 — OUTPUT</div>
+        <div class="node-name">Materialized Tensor</div>
+        <div class="node-sub">→ .numpy() · .execute() · hydrad consumer</div>
+      </div>
+      <div class="side">lazy → concrete<br>on demand only</div>
+    </div>
+
+    <!-- hardware targets -->
+    <div style="margin-top:18px;width:100%;text-align:center">
+      <div style="font-size:9px;letter-spacing:.12em;color:var(--color-text-secondary);text-transform:uppercase;margin-bottom:8px">hardware targets</div>
+      <div class="hw-row">
+        <div class="hw-chip" style="background:#1a3a5c;color:#7bb8f5;border:1px solid #2a5a8c">NVIDIA · CUDA</div>
+        <div class="hw-chip" style="background:#3a1a2a;color:#f580b0;border:1px solid #7a3060">AMD · ROCm</div>
+        <div class="hw-chip" style="background:#1a3a25;color:#70e090;border:1px solid #2a6a45">CPU · AVX-512</div>
+        <div class="hw-chip" style="background:#352800;color:#f0c535;border:1px solid #806010">NPU · Vendor</div>
+        <div class="hw-chip" style="background:#1a1a3a;color:#a0a0f0;border:1px solid #3a3a8a">Intel · SPIR-V</div>
+      </div>
+    </div>
+
+    <!-- kernel cache loop arrow -->
+    <svg class="loop-svg" width="48" height="100%" viewBox="0 0 48 400" preserveAspectRatio="none" style="top:auto;bottom:150px;height:200px;right:-10px">
+      <path d="M8 10 Q40 10 40 100 Q40 200 8 200" fill="none" stroke="var(--color-border-secondary)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#la)"/>
+      <defs><marker id="la" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--color-border-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+    </svg>
+    <div style="position:absolute;right:-52px;bottom:165px;font-size:8px;color:var(--color-text-secondary);writing-mode:vertical-rl;letter-spacing:.1em;text-transform:uppercase;opacity:.7">cache hit → skip compile</div>
+
+  </div>
+
+  <div style="margin-top:18px;text-align:center;font-size:9px;color:var(--color-text-secondary);letter-spacing:.06em">
+    planning overhead &lt; 1ms · graph planning &lt; 10K nodes · write once · run anywhere
+  </div>
+</div>
+
+<script>
+function ping(el, label) {
+  el.style.transition = 'filter .05s, transform .05s';
+  el.style.filter = 'brightness(1.5)';
+  el.style.transform = 'scale(1.06)';
+  setTimeout(() => {
+    el.style.filter = '';
+    el.style.transform = '';
+  }, 200);
+}
+// stagger dot animation speeds slightly per connector for natural feel
+document.querySelectorAll('.connector').forEach((c, i) => {
+  c.querySelectorAll('.dot').forEach((d, j) => {
+    d.style.animationDuration = (1.6 + i * 0.12) + 's';
+  });
+});
+</script>
