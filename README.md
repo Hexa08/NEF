@@ -12,7 +12,7 @@
 ```
 
 ### **Neural Essence Format**
-*The portable computation graph engine for AI workloads inside Hydra OS*
+*The portable computation graph engine for AI workloads inside HydraLogOS *
 
 <br/>
 
